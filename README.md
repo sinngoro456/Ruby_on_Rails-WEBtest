@@ -22,3 +22,9 @@ Things you may want to cover:
 * Deployment instructions
 
 * ...
+
+
+docker run --rm -p 3000:3000 `
+  -e SECRET_KEY_BASE=あなたのキー `
+  ruby_on_rails_we_btest
+
