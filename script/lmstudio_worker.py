@@ -5,14 +5,64 @@ import os
 import threading
 import time
 import uuid
+from urllib.parse import urlparse
 
 import requests
 
 
-RAILS_API_BASE = os.environ.get("RAILS_API_BASE", "http://127.0.0.1:3000").rstrip("/")
+def env_bool(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def normalize_base_url(base: str, default_scheme: str = "http") -> str:
+    base = base.strip()
+    if "://" not in base:
+        base = f"{default_scheme}://{base}"
+    return base.rstrip("/")
+
+
+def build_tailscale_base(prefix: str, default_port: int) -> str | None:
+    host = os.environ.get(f"TAILSCALE_{prefix}_HOST", "").strip()
+    if not host:
+        return None
+
+    scheme = os.environ.get(f"TAILSCALE_{prefix}_SCHEME", "http").strip() or "http"
+    port = int(os.environ.get(f"TAILSCALE_{prefix}_PORT", str(default_port)))
+    return f"{scheme}://{host}:{port}"
+
+
+def resolve_rails_base() -> str:
+    explicit = os.environ.get("RAILS_API_BASE", "").strip()
+    if explicit:
+        return normalize_base_url(explicit)
+
+    tailscale = build_tailscale_base("RAILS", 3000)
+    if tailscale:
+        return tailscale
+
+    return "http://127.0.0.1:3000"
+
+
+def resolve_lmstudio_base() -> str:
+    # Keep compatibility with both LMSTUDIO_BASE_URL and LM_STUDIO_BASE_URL.
+    explicit = os.environ.get("LMSTUDIO_BASE_URL", "").strip() or os.environ.get("LM_STUDIO_BASE_URL", "").strip()
+    if explicit:
+        return normalize_base_url(explicit)
+
+    tailscale = build_tailscale_base("LMSTUDIO", 1234)
+    if tailscale:
+        return tailscale
+
+    return "http://127.0.0.1:1234/v1"
+
+
+RAILS_API_BASE = resolve_rails_base()
 WORKER_SHARED_TOKEN = os.environ["WORKER_SHARED_TOKEN"]
-LMSTUDIO_BASE_URL = os.environ.get("LMSTUDIO_BASE_URL", "http://100.126.42.42:1234/v1").rstrip("/")
-LMSTUDIO_MODEL = os.environ.get("LMSTUDIO_MODEL", "").strip()
+LMSTUDIO_BASE_URL = resolve_lmstudio_base()
+LMSTUDIO_MODEL = (os.environ.get("LMSTUDIO_MODEL", "").strip() or os.environ.get("LM_STUDIO_MODEL", "").strip())
 LMSTUDIO_TEMPERATURE = float(os.environ.get("LMSTUDIO_TEMPERATURE", "0.2"))
 LMSTUDIO_MAX_TOKENS = int(os.environ.get("LMSTUDIO_MAX_TOKENS", "1024"))
 POLL_TIMEOUT_SECONDS = int(os.environ.get("POLL_TIMEOUT_SECONDS", "30"))
@@ -20,10 +70,28 @@ LEASE_SECONDS = int(os.environ.get("LEASE_SECONDS", "120"))
 HEARTBEAT_INTERVAL_SECONDS = int(os.environ.get("HEARTBEAT_INTERVAL_SECONDS", "20"))
 REQUEST_TIMEOUT_SECONDS = int(os.environ.get("REQUEST_TIMEOUT_SECONDS", "60"))
 SYSTEM_PROMPT = os.environ.get("LMSTUDIO_SYSTEM_PROMPT", "").strip()
+REQUESTS_VERIFY_TLS = env_bool("REQUESTS_VERIFY_TLS", True)
 
 
 session = requests.Session()
 session.headers.update({"X-Worker-Token": WORKER_SHARED_TOKEN})
+session.verify = REQUESTS_VERIFY_TLS
+
+
+def sanitize_text(text: str) -> str:
+    if not text:
+        return ""
+
+    cleaned = []
+    for ch in text:
+        code = ord(ch)
+        if 0xD800 <= code <= 0xDFFF:
+            continue
+        if code < 0x20 and ch not in ("\n", "\r", "\t"):
+            continue
+        cleaned.append(ch)
+
+    return "".join(cleaned)
 
 
 def rails_url(path: str) -> str:
@@ -31,7 +99,19 @@ def rails_url(path: str) -> str:
 
 
 def lmstudio_url(path: str) -> str:
-    return f"{LMSTUDIO_BASE_URL}{path}"
+    base = LMSTUDIO_BASE_URL
+    parsed = urlparse(base)
+
+    if not path.startswith("/"):
+        path = f"/{path}"
+
+    if parsed.path.rstrip("/") == "/v1":
+        return f"{base}{path}"
+
+    if path.startswith("/v1/"):
+        return f"{base}{path}"
+
+    return f"{base}/v1{path}"
 
 
 def discover_model() -> str:
@@ -76,7 +156,8 @@ def send_heartbeat(job_id: int, lease_token: str) -> None:
 
 
 def send_chunk(job_id: int, lease_token: str, chunk: str) -> None:
-    if not chunk:
+    chunk = sanitize_text(chunk)
+    if not chunk or not chunk.strip():
         return
 
     session.post(
@@ -141,7 +222,7 @@ def stream_completion(model: str, prompt_text: str):
             delta = choices[0].get("delta", {})
             content = delta.get("content", "")
             if content:
-                yield content
+                yield sanitize_text(content)
 
 
 def process_job(job: dict, model: str) -> None:
@@ -179,6 +260,9 @@ def process_job(job: dict, model: str) -> None:
 
 def main() -> None:
     model = discover_model()
+    print(f"Rails API base: {RAILS_API_BASE}", flush=True)
+    print(f"LM Studio base: {LMSTUDIO_BASE_URL}", flush=True)
+    print(f"TLS verify: {REQUESTS_VERIFY_TLS}", flush=True)
     print(f"Using LM Studio model: {model}", flush=True)
 
     while True:
