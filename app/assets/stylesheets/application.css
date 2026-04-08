@@ -51,6 +51,7 @@ body {
 
 textarea {
     width: 100%;
+    max-width: 100%;
     box-sizing: border-box;
     border: 1px solid #bfcfdb;
     border-radius: 12px;
@@ -58,6 +59,7 @@ textarea {
     resize: vertical;
     min-height: 120px;
     font: inherit;
+    overflow-wrap: anywhere;
 }
 
 .button-row {
@@ -109,9 +111,12 @@ button:disabled {
 }
 
 .bubble {
+    min-width: 0;
     border-radius: 14px;
     padding: 12px 14px;
     border: 1px solid #c8d8e8;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .prompt-bubble {
@@ -133,12 +138,15 @@ button:disabled {
 }
 
 .response-box {
+    min-width: 0;
     background: var(--answer-bg);
     color: #eaf3ff;
     border-radius: 10px;
     padding: 12px;
     min-height: 110px;
     white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
     margin: 0;
     overflow-x: auto;
 }
