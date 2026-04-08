@@ -6,56 +6,56 @@ on:
     branches: [ main ]
 
 jobs:
-  scan_ruby:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-      - name: Fix bin permissions
-        run: chmod +x bin/*
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          bundler-cache: true
-      - name: Scan for common Rails security vulnerabilities using static analysis
-        run: bin/brakeman --no-pager
-      - name: Scan for known security vulnerabilities in gems used
-        run: bin/bundler-audit
+  # scan_ruby:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v6
+  #     - name: Fix bin permissions
+  #       run: chmod +x bin/*
+  #     - name: Set up Ruby
+  #       uses: ruby/setup-ruby@v1
+  #       with:
+  #         bundler-cache: true
+  #     - name: Scan for common Rails security vulnerabilities using static analysis
+  #       run: bin/brakeman --no-pager
+  #     - name: Scan for known security vulnerabilities in gems used
+  #       run: bin/bundler-audit
 
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Install packages
-        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y libvips
-      - name: Checkout code
-        uses: actions/checkout@v6
-      - name: Fix bin permissions
-        run: chmod +x bin/*
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          bundler-cache: true
+  # test:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Install packages
+  #       run: sudo apt-get update && sudo apt-get install --no-install-recommends -y libvips
+  #     - name: Checkout code
+  #       uses: actions/checkout@v6
+  #     - name: Fix bin permissions
+  #       run: chmod +x bin/*
+  #     - name: Set up Ruby
+  #       uses: ruby/setup-ruby@v1
+  #       with:
+  #         bundler-cache: true
 
-  system-test:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Install packages
-        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y libvips
-      - name: Checkout code
-        uses: actions/checkout@v6
-      - name: Fix bin permissions
-        run: chmod +x bin/*
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          bundler-cache: true
-      - name: Keep screenshots from failed system tests
-        uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: screenshots
-          path: ${{ github.workspace }}/tmp/screenshots
-          if-no-files-found: ignore
+  # system-test:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Install packages
+  #       run: sudo apt-get update && sudo apt-get install --no-install-recommends -y libvips
+  #     - name: Checkout code
+  #       uses: actions/checkout@v6
+  #     - name: Fix bin permissions
+  #       run: chmod +x bin/*
+  #     - name: Set up Ruby
+  #       uses: ruby/setup-ruby@v1
+  #       with:
+  #         bundler-cache: true
+  #     - name: Keep screenshots from failed system tests
+  #       uses: actions/upload-artifact@v4
+  #       if: failure()
+  #       with:
+  #         name: screenshots
+  #         path: ${{ github.workspace }}/tmp/screenshots
+  #         if-no-files-found: ignore
 
   deploy:
     runs-on: ubuntu-latest

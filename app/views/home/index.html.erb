@@ -1,9 +1,136 @@
 <div class="container">
-  <h1 class="title">Welcome to Your Rails App</h1>
-  <p class="subtitle">This is the Home#index page.</p>
+  <h1 class="title">AI Prompt Queue Console</h1>
+  <p class="subtitle">Railsに送信したプロンプトに対し、逐次ストリーミングの回答を見やすく表示します。</p>
 
   <div class="card">
-    <h2>It works!</h2>
-    <p>Your Rails app is running successfully on Lightsail.</p>
+    <label class="label" for="prompt-input">質問</label>
+    <textarea id="prompt-input" rows="5" placeholder="ここにプロンプトを入力"></textarea>
+
+    <div class="button-row">
+      <button id="submit-btn" type="button">送信</button>
+      <span id="status-text" class="status idle">待機中</span>
+    </div>
+
+    <div class="result-wrap" id="result-wrap">
+      <div class="bubble prompt-bubble" id="prompt-bubble" hidden></div>
+      <div class="bubble answer-bubble" id="answer-bubble">
+        <div class="bubble-head">Assistant</div>
+        <pre id="response-box" class="response-box">まだ回答はありません。</pre>
+      </div>
+    </div>
   </div>
 </div>
+
+<script>
+  (() => {
+    const submitBtn = document.getElementById("submit-btn");
+    const promptInput = document.getElementById("prompt-input");
+    const statusText = document.getElementById("status-text");
+    const responseBox = document.getElementById("response-box");
+    const promptBubble = document.getElementById("prompt-bubble");
+
+    const setStatus = (text, className) => {
+      statusText.textContent = text;
+      statusText.className = `status ${className}`;
+    };
+
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    const stripThink = (text) => {
+      if (typeof text !== "string") {
+        return "";
+      }
+
+      return text
+        .replace(/<think>[\s\S]*?<\/think>/gi, "")
+        .replace(/Thinking Process:[\s\S]*?Finalizing:[\s\S]*?(?=\n\n|$)/gi, "")
+        .trim();
+    };
+
+    const pollPrompt = async (id) => {
+      const maxWaitMs = 180000;
+      const startTime = Date.now();
+      let lastLen = 0;
+      let staleTicks = 0;
+
+      while (Date.now() - startTime < maxWaitMs) {
+        const res = await fetch(`/api/prompts/${id}`);
+        if (!res.ok) {
+          throw new Error(`Status fetch failed: ${res.status}`);
+        }
+
+        const data = await res.json();
+        const cleaned = stripThink(data.response);
+        if (cleaned.length > 0) {
+          responseBox.textContent = cleaned;
+        }
+
+        if (cleaned.length > lastLen) {
+          lastLen = cleaned.length;
+          staleTicks = 0;
+        } else {
+          staleTicks += 1;
+        }
+
+        if (data.status === "completed") {
+          responseBox.textContent = cleaned || "(empty)";
+          setStatus("完了", "done");
+          return;
+        }
+
+        if (data.status === "failed") {
+          responseBox.textContent = `Error: ${data.error || "unknown"}`;
+          setStatus("失敗", "error");
+          return;
+        }
+
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        setStatus(`処理中 ${elapsed}s`, "running");
+
+        if (staleTicks > 240 && cleaned.length === 0) {
+          break;
+        }
+
+        await sleep(250);
+      }
+
+      setStatus("タイムアウト (処理が長い可能性)", "error");
+    };
+
+    submitBtn.addEventListener("click", async () => {
+      const prompt = promptInput.value.trim();
+      if (!prompt) {
+        setStatus("プロンプトを入力してください", "error");
+        return;
+      }
+
+      submitBtn.disabled = true;
+      responseBox.textContent = "回答を待機しています...";
+  promptBubble.hidden = false;
+  promptBubble.textContent = prompt;
+      setStatus("送信中", "running");
+
+      try {
+        const res = await fetch("/api/prompts", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ prompt })
+        });
+
+        if (!res.ok) {
+          throw new Error(`Prompt post failed: ${res.status}`);
+        }
+
+        const data = await res.json();
+        await pollPrompt(data.id);
+      } catch (err) {
+        responseBox.textContent = String(err);
+        setStatus("送信エラー", "error");
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+  })();
+</script>

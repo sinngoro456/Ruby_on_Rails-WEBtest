@@ -34,3 +34,7 @@
 # Ignore key files for decrypting credentials and more.
 /config/*.key
 
+# Ignore Python bytecode cache files.
+__pycache__/
+*.pyc
+
