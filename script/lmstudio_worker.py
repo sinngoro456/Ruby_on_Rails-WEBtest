@@ -206,8 +206,12 @@ def stream_completion(model: str, prompt_text: str):
     ) as response:
         response.raise_for_status()
 
-        for line in response.iter_lines(decode_unicode=True):
-            if not line or not line.startswith("data: "):
+        for raw_line in response.iter_lines(decode_unicode=False):
+            if not raw_line:
+                continue
+
+            line = raw_line.decode("utf-8", errors="replace")
+            if not line.startswith("data: "):
                 continue
 
             data = line[6:].strip()

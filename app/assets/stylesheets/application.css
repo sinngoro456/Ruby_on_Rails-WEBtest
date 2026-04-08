@@ -17,11 +17,14 @@ body {
     margin: 0;
     padding: 40px 16px;
     color: var(--text);
+    overflow-x: hidden;
 }
 
 .container {
+    width: min(100%, 860px);
     max-width: 860px;
     margin: 0 auto;
+    min-width: 0;
 }
 
 .title {
@@ -41,6 +44,7 @@ body {
     border-radius: 16px;
     box-shadow: 0 14px 34px rgba(20, 53, 79, 0.16);
     padding: 22px;
+    min-width: 0;
 }
 
 .label {
@@ -108,6 +112,7 @@ button:disabled {
     margin-top: 20px;
     display: grid;
     gap: 10px;
+    min-width: 0;
 }
 
 .bubble {
@@ -138,6 +143,8 @@ button:disabled {
 }
 
 .response-box {
+    width: 100%;
+    max-width: 100%;
     min-width: 0;
     background: var(--answer-bg);
     color: #eaf3ff;
